@@ -1,0 +1,15 @@
+meta {
+  name: Dequeue massage
+  type: http
+  seq: 5
+}
+
+get {
+  url: http://localhost:8000/queue/dequeue?topic=logs
+  body: none
+  auth: none
+}
+
+params:query {
+  topic: logs
+}
