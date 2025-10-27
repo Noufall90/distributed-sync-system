@@ -19,19 +19,30 @@ Tujuannya adalah untuk mensimulasikan skenario real-world dari sistem terdistrib
 | Load Testing | Locust / Python Benchmark Script |
 | Monitoring | Metrics internal (latency, throughput) |
 
-Install Dependency
+### Install Dependency
+```bash
 pip install -e .
+```
 
-Jalankan Redis
+### Jalankan Redis
+
+```bash
 docker run -d -p 6379:6379 redis:6-alpine
+```
 
-Build Docker Images
+### Build Docker Images
+```bash
 cd docker
 docker-compose up --build
+```
 
-Jalankan Sistem sudah build
+### Jalankan Sistem sudah build
+```bash
 cd docker
 docker-compose up
+```
 
-Setelah semua container berjalan, pastikan sistem aktif:
+### Setelah semua container berjalan, pastikan sistem aktif:
+```bash
 docker ps
+```
