@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: distributed-sync-system
+Version: 0.1.0
+Requires-Python: >=3.8
+Requires-Dist: fastapi>=0.68.0
+Requires-Dist: uvicorn>=0.15.0
+Requires-Dist: aiohttp>=3.8.1
+Requires-Dist: python-dotenv>=0.19.0
+Requires-Dist: redis>=4.3.4
+Requires-Dist: aioredis>=2.0.1
+Requires-Dist: prometheus-client>=0.14.1
+Requires-Dist: cryptography>=37.0.0
+Requires-Dist: pytest>=7.1.2
+Requires-Dist: pytest-asyncio>=0.18.3
+Requires-Dist: locust>=2.8.6
+Dynamic: requires-dist
+Dynamic: requires-python

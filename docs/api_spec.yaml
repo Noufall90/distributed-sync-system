@@ -1,0 +1,181 @@
+openapi: 3.0.0
+info:
+  title: Distributed Synchronization System API
+  version: 1.0.0
+  description: API for interacting with distributed lock, queue, and cache systems
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+
+paths:
+  /lock:
+    post:
+      summary: Acquire a lock
+      operationId: acquireLock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resourceId:
+                  type: string
+                lockType:
+                  type: string
+                  enum: [shared, exclusive]
+                requesterId:
+                  type: string
+      responses:
+        '200':
+          description: Lock acquired successfully
+        '409':
+          description: Lock acquisition failed
+    delete:
+      summary: Release a lock
+      operationId: releaseLock
+      parameters:
+        - name: resourceId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: requesterId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lock released successfully
+        '404':
+          description: Lock not found
+
+  /queue/{queueName}:
+    post:
+      summary: Enqueue a message
+      operationId: enqueueMessage
+      parameters:
+        - name: queueName
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                producerId:
+                  type: string
+      responses:
+        '200':
+          description: Message enqueued successfully
+    get:
+      summary: Dequeue a message
+      operationId: dequeueMessage
+      parameters:
+        - name: queueName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: consumerId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Message dequeued successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  messageId:
+                    type: string
+
+  /queue/{queueName}/ack:
+    post:
+      summary: Acknowledge message processing
+      operationId: ackMessage
+      parameters:
+        - name: queueName
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                messageId:
+                  type: string
+                consumerId:
+                  type: string
+      responses:
+        '200':
+          description: Message acknowledged successfully
+
+  /cache/{key}:
+    get:
+      summary: Read from cache
+      operationId: readCache
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cache read successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    type: string
+    put:
+      summary: Write to cache
+      operationId: writeCache
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                value:
+                  type: string
+      responses:
+        '200':
+          description: Cache write successful
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
