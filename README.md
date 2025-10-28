@@ -30,6 +30,12 @@ pip install -e .
 docker run -d -p 6379:6379 redis:6-alpine
 ```
 
+### Jalankan Vevn
+
+```bash
+./venv/scripts/activate
+```
+
 ### Build Docker Images
 ```bash
 cd docker
