@@ -51,5 +51,5 @@ docker ps
 
 
 ```
-https://youtu.be/_fCYRU0EJ78
+https:
 ```
