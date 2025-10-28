@@ -1,15 +1,15 @@
 meta {
   name: Dequeue massage
   type: http
-  seq: 5
+  seq: 3
 }
 
 get {
-  url: http://localhost:8000/queue/dequeue?topic=logs
+  url: http://localhost:8011/queue/testQueue?consumerId=consumer1
   body: none
   auth: none
 }
 
 params:query {
-  topic: logs
+  consumerId: consumer1
 }

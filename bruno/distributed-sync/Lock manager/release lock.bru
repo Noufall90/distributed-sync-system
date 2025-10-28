@@ -1,0 +1,16 @@
+meta {
+  name: release lock
+  type: http
+  seq: 2
+}
+
+delete {
+  url: http://localhost:8001/lock?resourceId=resource1&requesterId=client1
+  body: none
+  auth: none
+}
+
+params:query {
+  resourceId: resource1
+  requesterId: client1
+}

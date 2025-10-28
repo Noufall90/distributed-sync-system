@@ -46,3 +46,10 @@ docker-compose up
 ```bash
 docker ps
 ```
+
+## Video Youtube
+
+
+```
+https://youtu.be/_fCYRU0EJ78
+```
