@@ -43,7 +43,12 @@ class RaftConsensus:
         """Start the Raft consensus process"""
         self.peers = peers
         self._reset_leader_state()
+        self.last_heartbeat = time.time() * 1000
+        self.election_timeout = self._get_random_timeout()
         asyncio.create_task(self._election_timer())
+        # Initial leader election
+        await asyncio.sleep(random.uniform(0.1, 0.3))  # Random delay before first election
+        await self.start_election()
         
     def _reset_leader_state(self):
         """Reset leader state when transitioning to leader"""

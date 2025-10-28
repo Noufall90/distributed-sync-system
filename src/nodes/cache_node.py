@@ -49,6 +49,12 @@ class LRUCache:
         if key in self.cache:
             self.cache[key].state = CacheLineState.INVALID
 
+from fastapi import HTTPException
+from pydantic import BaseModel
+
+class CacheValue(BaseModel):
+    value: str
+
 class CacheNode(BaseNode):
     def __init__(self, node_id: str, host: str, port: int, capacity: int = 1000):
         super().__init__(node_id, host, port)
@@ -58,6 +64,48 @@ class CacheNode(BaseNode):
             "misses": 0,
             "invalidations": 0
         }
+        
+    def setup_routes(self):
+        super().setup_routes()
+        
+        @self.app.get("/cache/{key}")
+        async def read_cache(key: str):
+            try:
+                value = await self.read(key)
+                if value is None:
+                    raise HTTPException(status_code=404, detail="Key not found")
+                return {"key": key, "value": value}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+            
+        @self.app.post("/cache/{key}")
+        async def write_cache(key: str, value: CacheValue):
+            try:
+                success = await self.write(key, value.value)
+                if not success:
+                    raise HTTPException(status_code=409, detail="Write operation failed")
+                return {"success": True, "key": key}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+            
+        @self.app.put("/cache/{key}")
+        async def update_cache(key: str, value: CacheValue):
+            try:
+                success = await self.write(key, value.value)
+                if not success:
+                    raise HTTPException(status_code=409, detail="Update operation failed")
+                return {"success": True, "key": key}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+            
+        @self.app.get("/metrics/cache")
+        async def get_metrics():
+            return {
+                "hits": self.metrics["hits"],
+                "misses": self.metrics["misses"],
+                "invalidations": self.metrics["invalidations"],
+                "hit_ratio": self.metrics["hits"] / (self.metrics["hits"] + self.metrics["misses"]) if (self.metrics["hits"] + self.metrics["misses"]) > 0 else 0
+            }
         
     async def read(self, key: str) -> Optional[str]:
         """Read a value from cache"""
@@ -148,33 +196,32 @@ class CacheNode(BaseNode):
                 
         return success
         
-    async def handle_message(self, message: str) -> str:
+    async def handle_message(self, message: dict) -> dict:
         """Handle incoming messages"""
         try:
-            msg = eval(message)  # In production, use proper serialization
-            action = msg["action"]
-            params = msg["params"]
+            action = message.get("action")
+            params = message.get("params", {})
             
             if action == "invalidate":
                 self.cache.invalidate(params["key"])
                 self.metrics["invalidations"] += 1
-                return "True"
+                return {"success": True}
             elif action == "fetch":
                 cache_line = self.cache.get(params["key"])
                 if cache_line and cache_line.state != CacheLineState.INVALID:
                     cache_line.state = CacheLineState.SHARED
-                    return cache_line.value
+                    return {"success": True, "value": cache_line.value}
             elif action == "request_exclusive":
                 key = params["key"]
                 cache_line = self.cache.get(key)
                 if cache_line:
                     cache_line.state = CacheLineState.INVALID
-                return "True"
+                return {"success": True}
                 
-            return "None"
+            return {"success": False, "error": "Invalid action or no data found"}
         except Exception as e:
             self.logger.error(f"Error handling message: {e}")
-            return "None"
+            return {"error": str(e), "success": False}
             
     def get_metrics(self) -> Dict[str, int]:
         """Get cache performance metrics"""

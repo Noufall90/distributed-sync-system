@@ -6,6 +6,12 @@ meta {
 
 post {
   url: http://localhost:8021/cache/testKey
-  body: none
+  body: json
   auth: none
+}
+
+body:json {
+  {
+      "value": "test value"
+  }
 }

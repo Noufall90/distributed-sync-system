@@ -6,6 +6,14 @@ meta {
 
 post {
   url: http://localhost:8001/lock
-  body: none
+  body: json
   auth: none
+}
+
+body:json {
+  {
+      "resource_id": "resource",
+      "lock_type": "exclusive",
+      "requesterId": "client1"
+  }
 }
