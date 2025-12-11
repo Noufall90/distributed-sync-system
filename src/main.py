@@ -47,6 +47,24 @@ async def main():
         logger.info(f"Starting {node_type} node with ID {node_id} on {host}:{port}")
         node = NodeClass(node_id, host, port)
         
+        # Configure peers from environment variables
+        peer_nodes = os.environ.get("PEER_NODES", "")
+        if peer_nodes:
+            for peer in peer_nodes.split(","):
+                peer = peer.strip()
+                if peer:
+                    try:
+                        # Format: "peer_id:peer_host:peer_port"
+                        parts = peer.split(":")
+                        if len(parts) >= 3:
+                            peer_id = parts[0]
+                            peer_host = parts[1]
+                            peer_port = int(parts[2])
+                            node.add_peer(peer_id, peer_host, peer_port)
+                            logger.info(f"Added peer {peer_id} at {peer_host}:{peer_port}")
+                    except Exception as e:
+                        logger.error(f"Error parsing peer node '{peer}': {e}")
+        
         # Start the node
         await node.start()
         

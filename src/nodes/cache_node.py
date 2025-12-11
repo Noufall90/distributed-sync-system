@@ -1,4 +1,5 @@
 import asyncio
+import json
 from typing import Dict, Optional, List
 from collections import OrderedDict
 from enum import Enum
@@ -196,7 +197,7 @@ class CacheNode(BaseNode):
                 
         return success
         
-    async def handle_message(self, message: dict) -> dict:
+    async def handle_message(self, message: dict) -> str:
         """Handle incoming messages"""
         try:
             action = message.get("action")
@@ -205,23 +206,24 @@ class CacheNode(BaseNode):
             if action == "invalidate":
                 self.cache.invalidate(params["key"])
                 self.metrics["invalidations"] += 1
-                return {"success": True}
+                return json.dumps({"success": True})
             elif action == "fetch":
                 cache_line = self.cache.get(params["key"])
                 if cache_line and cache_line.state != CacheLineState.INVALID:
                     cache_line.state = CacheLineState.SHARED
-                    return {"success": True, "value": cache_line.value}
+                    return json.dumps({"success": True, "value": cache_line.value})
+                return json.dumps({"success": False})
             elif action == "request_exclusive":
                 key = params["key"]
                 cache_line = self.cache.get(key)
                 if cache_line:
                     cache_line.state = CacheLineState.INVALID
-                return {"success": True}
+                return json.dumps({"success": True})
                 
-            return {"success": False, "error": "Invalid action or no data found"}
+            return json.dumps({"success": False, "error": "Invalid action or no data found"})
         except Exception as e:
             self.logger.error(f"Error handling message: {e}")
-            return {"error": str(e), "success": False}
+            return json.dumps({"error": str(e), "success": False})
             
     def get_metrics(self) -> Dict[str, int]:
         """Get cache performance metrics"""

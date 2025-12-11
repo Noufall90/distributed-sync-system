@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import json
 from typing import Dict, Set, Optional, Union
 from fastapi import FastAPI, HTTPException
 import uvicorn
@@ -35,17 +36,27 @@ class BaseNode:
     async def handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         """Handle incoming connections"""
         try:
-            data = await reader.read(1024)
+            data = await asyncio.wait_for(reader.read(4096), timeout=10.0)
             message = data.decode()
             try:
-                import json
                 message_dict = json.loads(message)
                 response = await self.handle_message(message_dict)
-                writer.write(json.dumps(response).encode())
+                # Ensure response is JSON string
+                if isinstance(response, str):
+                    writer.write(response.encode())
+                else:
+                    writer.write(json.dumps(response).encode())
             except json.JSONDecodeError:
                 self.logger.error("Invalid JSON received")
                 writer.write(json.dumps({"error": "Invalid JSON format"}).encode())
             await writer.drain()
+        except asyncio.TimeoutError:
+            self.logger.error("Connection timeout")
+            try:
+                writer.write(json.dumps({"error": "Connection timeout"}).encode())
+                await writer.drain()
+            except:
+                pass
         except Exception as e:
             self.logger.error(f"Error handling connection: {e}")
             try:
@@ -54,14 +65,17 @@ class BaseNode:
             except:
                 pass
         finally:
-            writer.close()
-            await writer.wait_closed()
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except:
+                pass
             
     async def handle_message(self, message: str) -> str:
         """Handle incoming messages - to be implemented by specific node types"""
         raise NotImplementedError
         
-    async def send_message(self, node_id: str, message: str) -> Union[bool, dict, None]:
+    async def send_message(self, node_id: str, message: str) -> Union[bool, dict, None, str]:
         """Send message to another node"""
         if node_id not in self.peers:
             raise HTTPException(
@@ -71,11 +85,19 @@ class BaseNode:
             
         host, port = self.peers[node_id]
         try:
-            reader, writer = await asyncio.open_connection(host, port)
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port),
+                timeout=5.0
+            )
+            
+            # If message is dict, convert to JSON
+            if isinstance(message, dict):
+                message = json.dumps(message)
+                
             writer.write(message.encode())
             await writer.drain()
             
-            response = await reader.read(1024)
+            response = await asyncio.wait_for(reader.read(4096), timeout=5.0)
             writer.close()
             await writer.wait_closed()
             
@@ -83,32 +105,27 @@ class BaseNode:
                 return None
                 
             try:
-                import json
-                return json.loads(response.decode())
-            except json.JSONDecodeError:
+                # Try to parse as JSON first
                 response_str = response.decode()
+                return json.loads(response_str)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                response_str = response.decode()
+                # Return as string if not JSON
                 if response_str.lower() == "true":
                     return True
                 elif response_str.lower() == "false":
                     return False
                 return response_str
                 
-        except ConnectionRefusedError:
-            raise HTTPException(
-                status_code=503,
-                detail=f"Node {node_id} is not accessible"
-            )
         except asyncio.TimeoutError:
-            raise HTTPException(
-                status_code=504,
-                detail=f"Timeout while connecting to node {node_id}"
-            )
+            self.logger.error(f"Timeout while connecting to node {node_id}")
+            return None
+        except ConnectionRefusedError:
+            self.logger.error(f"Node {node_id} is not accessible at {host}:{port}")
+            return None
         except Exception as e:
             self.logger.error(f"Error sending message to {node_id}: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to communicate with node {node_id}: {str(e)}"
-            )
+            return None
             
     def add_peer(self, node_id: str, host: str, port: int):
         """Add a peer node"""

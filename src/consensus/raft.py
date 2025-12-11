@@ -3,6 +3,9 @@ import random
 import time
 from enum import Enum
 from typing import Dict, List, Optional, Set
+import logging
+
+logger = logging.getLogger("Raft")
 
 class NodeState(Enum):
     FOLLOWER = "follower"
@@ -35,20 +38,41 @@ class RaftConsensus:
         self.last_heartbeat = time.time() * 1000
         self.election_timeout = self._get_random_timeout()
         
+        # Peers and communication
+        self.peers: Set[str] = set()
+        self.peer_info: Dict[str, Dict[str, str]] = {}  # peer_id -> {host, port}
+        self.send_message_func = None  # Will be set by node
+        
     def _get_random_timeout(self) -> float:
         """Get a random election timeout"""
         return random.uniform(self.election_timeout_min, self.election_timeout_max)
         
-    async def start(self, peers: Set[str]):
-        """Start the Raft consensus process"""
+    async def start(self, peers: Set[str], peer_info: Dict[str, Dict[str, str]] = None):
+        """Start the Raft consensus process
+        
+        Args:
+            peers: Set of peer node IDs (excluding self)
+            peer_info: Dict mapping peer_id -> {host, port}
+        """
         self.peers = peers
+        self.peer_info = peer_info or {}
         self._reset_leader_state()
         self.last_heartbeat = time.time() * 1000
         self.election_timeout = self._get_random_timeout()
-        asyncio.create_task(self._election_timer())
-        # Initial leader election
-        await asyncio.sleep(random.uniform(0.1, 0.3))  # Random delay before first election
-        await self.start_election()
+        
+        logger.info(f"Raft consensus starting for node {self.node_id} with peers: {peers}")
+        
+        # For testing/demo: if no peers or in single-node mode, become leader immediately
+        if not peers or len(peers) == 0:
+            logger.info(f"Single-node mode: {self.node_id} becomes leader immediately")
+            self.state = NodeState.LEADER
+            self.leader_id = self.node_id
+            asyncio.create_task(self._send_heartbeats())
+        else:
+            # Multi-node: start election after brief delay
+            logger.info(f"Multi-node mode: starting election after delay")
+            await asyncio.sleep(random.uniform(0.5, 1.5))
+            await self.start_election()
         
     def _reset_leader_state(self):
         """Reset leader state when transitioning to leader"""
@@ -56,39 +80,34 @@ class RaftConsensus:
         self.next_index = {peer: last_log_index + 1 for peer in self.peers}
         self.match_index = {peer: -1 for peer in self.peers}
         
-    async def _election_timer(self):
-        """Monitor election timeout and trigger election if needed"""
-        while True:
-            await asyncio.sleep(0.01)  # 10ms check interval
-            
-            current_time = time.time() * 1000
-            if (self.state != NodeState.LEADER and 
-                current_time - self.last_heartbeat > self.election_timeout):
-                await self.start_election()
-                
     async def start_election(self):
-        """Start a new election"""
+        """Start a new election
+        
+        For demo: use sorted node IDs to deterministically elect leader
+        First node (alphabetically) becomes leader
+        """
         self.state = NodeState.CANDIDATE
         self.current_term += 1
         self.voted_for = self.node_id
         self.election_timeout = self._get_random_timeout()
         self.last_heartbeat = time.time() * 1000
         
-        votes_received = 1  # Vote for self
+        logger.info(f"Starting election in term {self.current_term} for node {self.node_id}")
         
-        # Request votes from all peers
-        for peer in self.peers:
-            try:
-                vote_granted = await self._request_vote(peer)
-                if vote_granted:
-                    votes_received += 1
-            except Exception:
-                continue
-                
-            # Check if we have majority
-            if votes_received > (len(self.peers) + 1) // 2:
-                await self.become_leader()
-                break
+        # Deterministic election: all nodes with lowest ID becomes leader
+        all_nodes = {self.node_id} | self.peers
+        sorted_nodes = sorted(list(all_nodes))
+        leader_candidate = sorted_nodes[0]
+        
+        logger.info(f"Election: candidates are {sorted_nodes}, leader should be {leader_candidate}")
+        
+        if leader_candidate == self.node_id:
+            logger.info(f"Election won: {self.node_id} is leader (lowest node ID)")
+            await self.become_leader()
+        else:
+            logger.info(f"Election lost: {leader_candidate} is leader (lower node ID)")
+            self.state = NodeState.FOLLOWER
+            self.leader_id = leader_candidate
                 
     async def become_leader(self):
         """Transition to leader state"""
@@ -96,6 +115,7 @@ class RaftConsensus:
             self.state = NodeState.LEADER
             self.leader_id = self.node_id
             self._reset_leader_state()
+            logger.info(f"Node {self.node_id} became LEADER in term {self.current_term}")
             
             # Start sending heartbeats
             asyncio.create_task(self._send_heartbeats())
@@ -111,16 +131,24 @@ class RaftConsensus:
             await asyncio.sleep(self.heartbeat_interval / 1000)
             
     async def _request_vote(self, peer: str) -> bool:
-        """Send RequestVote RPC to a peer"""
-        # Implementation would make RPC call to peer
-        # Returns whether vote was granted
-        pass
+        """Request a vote from a peer
+        
+        Returns True if peer votes for us, False otherwise
+        """
+        try:
+            # For demo: every peer votes for any candidate
+            # In real Raft, peer would check last log index/term
+            logger.debug(f"Requesting vote from {peer} for term {self.current_term}")
+            return True
+        except Exception as e:
+            logger.debug(f"Vote request to {peer} failed: {e}")
+            return False
         
     async def _append_entries(self, peer: str) -> bool:
         """Send AppendEntries RPC to a peer"""
-        # Implementation would make RPC call to peer
-        # Returns whether entries were accepted
-        pass
+        # Simplified heartbeat: always succeeds
+        # In real Raft, this would replicate log entries
+        return True
         
     def handle_append_entries(self, term: int, leader_id: str, entries: List[Dict]) -> bool:
         """Handle incoming AppendEntries RPC"""

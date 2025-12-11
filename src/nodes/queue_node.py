@@ -57,16 +57,6 @@ class QueueMessage:
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-class QueueMessage:
-    def __init__(self, message_id: str, content: str, producer: str):
-        self.message_id = message_id
-        self.content = content
-        self.producer = producer
-        self.timestamp = asyncio.get_event_loop().time()
-        self.delivered = False
-        self.delivery_attempts = 0
-        self.consumer = None  # Track which consumer has the message
-
 class EnqueueRequest(BaseModel):
     message: str
     producerId: str

@@ -1,5 +1,6 @@
 import asyncio
 import time
+import uvicorn
 from typing import Dict, Set
 from consensus.raft import RaftConsensus, NodeState
 from nodes.base_node import BaseNode
@@ -33,9 +34,9 @@ class LockRequest(BaseModel):
         }
         
     def validate_lock_type(self):
-        if self.lockType not in [LockType.SHARED, LockType.EXCLUSIVE]:
+        if self.lock_type not in [LockType.SHARED, LockType.EXCLUSIVE]:
             raise ValueError(
-                f"Invalid lock type '{self.lockType}'. Must be either '{LockType.SHARED}' or '{LockType.EXCLUSIVE}'"
+                f"Invalid lock type '{self.lock_type}'. Must be either '{LockType.SHARED}' or '{LockType.EXCLUSIVE}'"
             )
 
 class LockManager(BaseNode):
@@ -44,7 +45,7 @@ class LockManager(BaseNode):
         self.raft = RaftConsensus(node_id)
         self.locks: Dict[str, Lock] = {}  # resource_id -> Lock
         self.waiting: Dict[str, Set[str]] = {}  # resource_id -> set of waiting nodes
-        self._leader_election_timeout = 10.0  # Increased to 10 seconds for better reliability
+        self._leader_election_timeout = 30.0  # Increased to 30 seconds for better reliability in Docker environment
 
     def setup_routes(self):
         super().setup_routes()
@@ -88,7 +89,7 @@ class LockManager(BaseNode):
                             "requester": request.requester_id
                         })
                         if result:
-                            return {"success": True, "resourceId": request.resourceId}
+                            return {"success": True, "resource_id": request.resource_id}
                         raise HTTPException(status_code=409, detail="Lock acquisition failed on leader")
                     except HTTPException as he:
                         raise he
@@ -96,9 +97,9 @@ class LockManager(BaseNode):
                         raise HTTPException(status_code=500, detail=f"Leader forwarding error: {str(e)}")
                         
                 # We are the leader, handle the request using the unified method
-                success = await self.acquire_lock(request.resourceId, request.lockType, request.requesterId)
+                success = await self.acquire_lock(request.resource_id, request.lock_type, request.requester_id)
                 if success:
-                    return {"success": True, "resourceId": request.resourceId}
+                    return {"success": True, "resource_id": request.resource_id}
                 else:
                     raise HTTPException(status_code=409, detail="Lock acquisition failed (added to waiting queue)")
                 
@@ -109,9 +110,9 @@ class LockManager(BaseNode):
                 raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
         @self.app.delete("/lock")
-        async def release_lock(resourceId: str, requesterId: str):
-            if not resourceId or not requesterId:
-                raise HTTPException(status_code=422, detail="resourceId and requesterId are required")
+        async def release_lock(resource_id: str, requester_id: str):
+            if not resource_id or not requester_id:
+                raise HTTPException(status_code=422, detail="resource_id and requester_id are required")
                 
             try:
                 self.check_leader_availability()
@@ -119,8 +120,8 @@ class LockManager(BaseNode):
                 if not self.is_leader():
                     try:
                         result = await self.forward_to_leader("release_lock", {
-                            "resource_id": resourceId,
-                            "requester": requesterId
+                            "resource_id": resource_id,
+                            "requester": requester_id
                         })
                         if result:
                             return {"success": True}
@@ -131,7 +132,7 @@ class LockManager(BaseNode):
                         raise HTTPException(status_code=500, detail=f"Leader forwarding error: {str(e)}")
                 
                 # We are the leader, handle the request using the unified method
-                success = await self.release_lock(resourceId, requesterId)
+                success = await self.release_lock(resource_id, requester_id)
                 if success:
                     return {"success": True}
                 else:
@@ -144,16 +145,16 @@ class LockManager(BaseNode):
                 raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
         @self.app.get("/lock/status")
-        async def lock_status(resourceId: str):
-            if resourceId in self.locks:
-                lock = self.locks[resourceId]
+        async def lock_status(resource_id: str):
+            if resource_id in self.locks:
+                lock = self.locks[resource_id]
                 return {
-                    "resourceId": lock.resource_id,
-                    "lockType": lock.lock_type,
+                    "resource_id": lock.resource_id,
+                    "lock_type": lock.lock_type,
                     "owner": lock.owner,
                     "status": "locked"
                 }
-            return {"resourceId": resourceId, "status": "unlocked"}
+            return {"resource_id": resource_id, "status": "unlocked"}
 
         @self.app.get("/metrics/locks")
         async def get_metrics():
@@ -174,23 +175,31 @@ class LockManager(BaseNode):
         
     async def start(self):
         """Start the lock manager node"""
-        await super().start()
+        # Log peer information
+        self.logger.info(f"Starting lock manager node {self.node_id}")
+        self.logger.info(f"Configured peers: {list(self.peers.keys())}")
+        
+        # Start the Raft consensus
         await self.raft.start(set(self.peers.keys()))
         
-        # Handle single-node mode: If no peers, set self as leader
-        if not self.peers:
-            self.raft.leader_id = self.node_id
-            self.raft.state = NodeState.LEADER
-            self.logger.info(f"Single-node mode: Set {self.node_id} as leader")
-            return
+        # Start the HTTP server in background
+        import asyncio
+        asyncio.create_task(self._run_server())
         
-        # Wait for initial leader election
-        start_time = time.time()
-        while not self.raft.leader_id:
-            if time.time() - start_time > self._leader_election_timeout:
-                self.logger.warning("Initial leader election timed out")
-                break
-            await asyncio.sleep(0.1)
+        # Keep the process alive
+        try:
+            while True:
+                await asyncio.sleep(1)
+        except KeyboardInterrupt:
+            self.logger.info("Shutting down...")
+    
+    async def _run_server(self):
+        """Run the FastAPI server"""
+        self.logger.info(f"Starting node {self.node_id} at {self.host}:{self.port}")
+        import uvicorn
+        config = uvicorn.Config(self.app, host=self.host, port=self.port, log_level="info")
+        server = uvicorn.Server(config)
+        await server.serve()
         
     async def acquire_lock(self, resource_id: str, lock_type: str, requester: str) -> bool:
         """Try to acquire a lock on a resource"""
