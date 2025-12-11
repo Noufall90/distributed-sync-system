@@ -1,0 +1,16 @@
+meta {
+  name: Delete lock
+  type: http
+  seq: 3
+}
+
+delete {
+  url: http://localhost:8001/lock?resource_id=database_connection_1&requester_id=client_001
+  body: none
+  auth: none
+}
+
+params:query {
+  resource_id: database_connection_1
+  requester_id: client_001
+}

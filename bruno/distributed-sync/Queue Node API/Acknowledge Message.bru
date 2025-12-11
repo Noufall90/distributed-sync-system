@@ -1,0 +1,18 @@
+meta {
+  name: Acknowledge Message
+  type: http
+  seq: 3
+}
+
+post {
+  url: http://localhost:8011/queue/tasks/ack
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+      "message_id": "tasks:api_service_001:1702351200.123456",
+      "consumer_id": "worker_001"
+  }
+}

@@ -1,7 +1,7 @@
 meta {
-  name: Acquire lock
+  name: Acquire Lock
   type: http
-  seq: 1
+  seq: 2
 }
 
 post {
@@ -12,8 +12,8 @@ post {
 
 body:json {
   {
-    "resource_id": "resource4",
+    "resource_id": "database_connection_1",
     "lock_type": "exclusive",
-    "requester_id": "client1"
+    "requester_id": "client_001"
   }
 }

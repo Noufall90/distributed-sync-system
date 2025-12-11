@@ -1,0 +1,21 @@
+meta {
+  name: Write to Cache
+  type: http
+  seq: 1
+}
+
+post {
+  url: http://localhost:8021/cache/user_profile_123?ttl=3600
+  body: json
+  auth: none
+}
+
+params:query {
+  ttl: 3600
+}
+
+body:json {
+  {
+    "value": "user_data_content_here"
+  }
+}

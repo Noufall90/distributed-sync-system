@@ -1,0 +1,18 @@
+meta {
+  name: Enqueue Massage
+  type: http
+  seq: 1
+}
+
+post {
+  url: http://localhost:8011/queue/tasks
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "message": "Process user registration for user_123",
+    "producerId": "api_service_001"
+  }
+}

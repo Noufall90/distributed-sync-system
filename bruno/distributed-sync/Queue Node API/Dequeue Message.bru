@@ -1,0 +1,15 @@
+meta {
+  name: Dequeue Message
+  type: http
+  seq: 2
+}
+
+delete {
+  url: http://localhost:8011/queue/tasks?consumerId=worker_001
+  body: none
+  auth: none
+}
+
+params:query {
+  consumerId: worker_001
+}
